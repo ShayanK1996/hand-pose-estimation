@@ -1,175 +1,78 @@
-# Hand Pose Estimation from RGB Images Using CNNs
+# 3D Hand Pose Estimation from RGB Images
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-1.12+-ee4c2c.svg)](https://pytorch.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**ELE 588: Applied Machine Learning — Final Project**  
-**University of Rhode Island**
+Deep learning approach for estimating 3D hand joint positions from single RGB images. Compares a custom CNN architecture against ResNet50 with transfer learning.
 
----
+## Results
 
-## Overview
+| Model | MPJPE (mm) | PCK@20mm |
+|-------|------------|----------|
+| Custom CNN | 40.83 ± 8.89 | 19.0% |
+| ResNet50 (ImageNet) | **12.92 ± 0.10** | **82.8%** |
 
-3D hand pose estimation from monocular RGB images using deep learning. This project compares a custom 4-block CNN trained from scratch against ResNet50 with transfer learning from ImageNet.
+Transfer learning reduces error by **68.4%** and provides significantly more stable training (±0.10mm vs ±8.89mm variance across folds).
 
-### Key Results
+## Method
 
-| Model | MPJPE (mm) | PCK@20mm (%) |
-|-------|------------|--------------|
-| Custom CNN | 40.83 ± 8.89 | 19.0 ± 9.8 |
-| ResNet50 | **12.92 ± 0.10** | **82.8 ± 0.2** |
+**Architecture:** ResNet50 backbone (pretrained on ImageNet) with custom regression head:
+- Global average pooling → 2048-dim features
+- FC layers: 2048 → 512 → 256 → 63 (21 joints × 3 coordinates)
+- BatchNorm, ReLU, Dropout regularization
 
-**Transfer learning achieves 68.4% reduction in MPJPE.**
+**Training:**
+- Loss: MSE on root-relative normalized coordinates
+- Optimizer: AdamW (lr=3e-4, weight_decay=1e-5)
+- Scheduler: CosineAnnealingLR
+- Mixed-precision training (FP16)
+- 5-fold cross-validation
 
-### Sample Results
-
-<p align="center">
-  <img src="figures/ablation_comparison.png" width="80%" alt="Ablation Study Results">
-</p>
-
----
-
-## Dataset
-
-**FreiHAND Dataset** (Zimmermann & Brox, ICCV 2019)
-- Training: 32,560 RGB images (256×256 pixels)
-- Evaluation: 3,960 held-out samples
-- Annotations: 21 hand keypoints in 3D coordinates
-
-Download from: https://lmb.informatik.uni-freiburg.de/projects/freihand/
-
-Expected directory structure:
-```
-Data/
-├── FreiHAND_pub_v2/
-│   ├── training/
-│   │   └── rgb/
-│   └── training_xyz.json
-└── FreiHAND_pub_v2_eval/
-    └── evaluation/
-        ├── rgb/
-        └── anno/
-```
-
----
-
-## Files Description
-
-| File | Description |
-|------|-------------|
-| `Part1_Baseline.py` | Initial baseline CNN implementation with basic training loop |
-| `Part2_Ablation_No_Tuning.py` | Ablation study comparing Custom CNN vs ResNet50 (toggle `USE_RESNET`) |
-| `Part3_Hyperparameters.py` | Grid search for optimal hyperparameters (LR, weight decay) |
-| `Part4_cross_validation.py` | 5-fold cross-validation on both models with optimized hyperparameters |
-| `Part5_Final_resnet50_V2.py` | Final evaluation on held-out test set with visualization generation |
-
----
-
-## Installation
+## Quick Start
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/hand-pose-estimation.git
+git clone https://github.com/Shayank1996/hand-pose-estimation.git
 cd hand-pose-estimation
 pip install -r requirements.txt
 ```
 
-**Requirements:**
-- Python 3.8+
-- PyTorch 1.12+ with CUDA support (recommended)
-- See `requirements.txt` for full dependencies
+Download [FreiHAND dataset](https://lmb.informatik.uni-freiburg.de/projects/freihand/) and extract to `Data/FreiHAND_pub_v2/`.
 
----
-
-## Usage
-
-### 1. Baseline Training (Quick Test)
 ```bash
-python Part1_Baseline.py
+# Train and evaluate
+python cross_validation.py    # 5-fold CV on both models
+python evaluate.py            # Test set evaluation
 ```
 
-### 2. Ablation Study
-```bash
-# Edit Part2_Ablation_No_Tuning.py:
-# Set USE_RESNET = False for Custom CNN
-# Set USE_RESNET = True for ResNet50
-python Part2_Ablation_No_Tuning.py
-```
+## Files
 
-### 3. Hyperparameter Search
-```bash
-python Part3_Hyperparameters.py
-# Runtime: ~8-9 hours (tests 12 configurations × 2 models)
-```
+| File | Description |
+|------|-------------|
+| `baseline_cnn.py` | Custom 4-block CNN architecture |
+| `ablation_study.py` | Side-by-side comparison of CNN vs ResNet50 |
+| `hyperparameter_search.py` | Grid search over learning rates and weight decay |
+| `cross_validation.py` | 5-fold cross-validation with both models |
+| `evaluate.py` | Final evaluation on held-out test set |
 
-### 4. Cross-Validation
-```bash
-python Part4_cross_validation.py
-# Runtime: ~5-6 hours (5 folds × 40 epochs × 2 models)
-```
+## Dataset
 
-### 5. Test Set Evaluation
-```bash
-python Part5_Final_resnet50_V2.py
-# Requires: best_model_resnet50.pth from Step 4
-```
-
----
-
-## Hyperparameters (Optimized via Grid Search)
-
-| Model | Learning Rate | Weight Decay |
-|-------|---------------|--------------|
-| Custom CNN | 1e-3 | 1e-4 |
-| ResNet50 | 3e-4 | 1e-5 |
-
-**Fixed settings:**
-- Optimizer: AdamW
-- Batch size: 32
-- Scheduler: CosineAnnealingLR
-- Early stopping patience: 10 epochs
-- Mixed-precision training (FP16)
-
----
-
-## Output Files
-
-After running the scripts, the following files are generated:
-
-- `best_model_*.pth` - Model checkpoints
-- `*_plots.png` - Training curves and visualizations
-- `*_history.pth` - Training history for analysis
-- `ablation_study_cv_results.pth` - Cross-validation results
-- `test_*.png` - Test set evaluation figures
-
----
-
-## Hardware
-
-Experiments conducted on:
-- Dell Precision 7820 Tower
-- NVIDIA CUDA-enabled GPU
-- Mixed-precision training reduces memory by ~40%
-
----
-
-## License
-
-MIT License — see [LICENSE](LICENSE) for details.
+**FreiHAND** (Zimmermann et al., ICCV 2019)
+- 32,560 training images (224×224 RGB)
+- 3,960 evaluation images
+- 21 hand keypoints with 3D annotations
 
 ## Citation
 
-If you use this code, please cite the FreiHAND dataset:
-
 ```bibtex
 @inproceedings{zimmermann2019freihand,
-  title={FreiHAND: A Dataset for Markerless Capture of Hand Pose and Shape from Single RGB Images},
+  title={FreiHAND: A Dataset for Markerless Capture of Hand Pose and Shape},
   author={Zimmermann, Christian and Ceylan, Duygu and Yang, Jimei and Russell, Bryan and Argus, Max and Brox, Thomas},
   booktitle={ICCV},
   year={2019}
 }
 ```
 
-## Acknowledgments
+## License
 
-- FreiHAND dataset by Zimmermann & Brox
-- Course: ELE 588 Applied Machine Learning, University of Rhode Island
+MIT
